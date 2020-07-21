@@ -22,7 +22,6 @@
  */
 package com.sun.jna;
 
-import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -49,7 +48,6 @@ import java.util.ArrayList;
  */
 public class Memory6 extends Pointer {
 
-    private static final ReferenceQueue<Object> QUEUE = new ReferenceQueue<Object>();
     private static Entry HEAD;
 
     /**
@@ -57,8 +55,8 @@ public class Memory6 extends Pointer {
      *
      * @return the length of the list
      */
-    static int checkLinkedList() {
-        synchronized (QUEUE) {
+    public static int checkLinkedList() {
+        synchronized (Entry.class) {
             ArrayList<Entry> entries = new ArrayList<Entry>();
 
             Entry entry = HEAD;
@@ -94,8 +92,8 @@ public class Memory6 extends Pointer {
         private Entry next;
         private Entry prev;
 
-        Entry(Memory6 referent) {
-            super(referent, QUEUE);
+        private Entry(Memory6 referent) {
+            super(referent);
         }
 
         /**
@@ -103,11 +101,11 @@ public class Memory6 extends Pointer {
          *
          * @param instance the instance to track
          */
-        static void track(Memory6 instance) {
+        static Entry track(Memory6 instance) {
             // keep object allocation outside the syncronized block
             Entry entry = new Entry(instance);
 
-            synchronized (QUEUE) {
+            synchronized (Entry.class) {
                 if (HEAD != null) {
                     entry.next = HEAD;
                     HEAD = HEAD.prev = entry;
@@ -115,26 +113,15 @@ public class Memory6 extends Pointer {
                     HEAD = entry;
                 }
             }
-        }
 
-        /**
-         * Clean up the dead weak references still in memory.
-         */
-        static void cleanup() {
-            synchronized (QUEUE) {
-                Entry dead;
-
-                while ((dead = (Entry) QUEUE.poll()) != null) {
-                    dead.remove();
-                }
-            }
+            return entry;
         }
 
         /**
          * Dispose all tracked instances and remove them from tracking.
          */
         static void disposeAll() {
-            synchronized (QUEUE) {
+            synchronized (Entry.class) {
                 Entry entry = HEAD;
 
                 while (entry != null) {
@@ -150,19 +137,21 @@ public class Memory6 extends Pointer {
          * @return the next tracked instance in the linked list
          */
         private Entry remove() {
-            Entry next;
+            synchronized (Entry.class) {
+                Entry next;
 
-            if (HEAD != this) {
-                next = this.prev.next = this.next;
-            } else {
-                next = HEAD = HEAD.next;
+                if (HEAD != this) {
+                    next = this.prev.next = this.next;
+                } else {
+                    next = HEAD = HEAD.next;
+                }
+
+                if (next != null) {
+                    next.prev = this.prev;
+                }
+
+                return next;
             }
-
-            if (next != null) {
-                next.prev = this.prev;
-            }
-
-            return next;
         }
     }
 
@@ -182,6 +171,7 @@ public class Memory6 extends Pointer {
         Entry.disposeAll();
     }
 
+    private final Entry tracking;
     protected long size; // Size of the malloc'ed space
 
     /**
@@ -231,11 +221,13 @@ public class Memory6 extends Pointer {
             throw new OutOfMemoryError("Cannot allocate " + size + " bytes");
         }
 
-        Entry.track(this);
+        tracking = Entry.track(this);
     }
 
     protected Memory6() {
         super();
+
+        tracking = null;
     }
 
     /**
@@ -311,8 +303,11 @@ public class Memory6 extends Pointer {
         try {
             free(peer);
         } finally {
-            Entry.cleanup();
             peer = 0;
+
+            if (tracking != null) {
+                tracking.remove();
+            }
         }
     }
 

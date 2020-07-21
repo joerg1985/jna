@@ -186,7 +186,7 @@ public class Memory6 extends Pointer {
             throw new OutOfMemoryError("Cannot allocate " + size + " bytes");
         }
 
-        //Entry.track(this);
+        Entry.track(this);
     }
 
     protected Memory6() {

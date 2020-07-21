@@ -25,6 +25,7 @@ package com.sun.jna;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 /**
  * A <code>Pointer</code> to memory obtained from the native heap via a call to <code>malloc</code>.
@@ -52,9 +53,44 @@ public class Memory6 extends Pointer {
     private static Entry HEAD;
 
     /**
+     * Unit-Testing only, ensure the linked list is in good shape.
+     *
+     * @return the length of the list
+     */
+    static int checkLinkedList() {
+        synchronized (QUEUE) {
+            ArrayList<Entry> entries = new ArrayList<Entry>();
+
+            Entry entry = HEAD;
+
+            while (entry != null) {
+                entries.add(entry);
+                entry = entry.next;
+            }
+
+            if (!entries.isEmpty()) {
+                int index = entries.size() - 1;
+                entry = entries.get(index);
+
+                while (entry != null) {
+                    if (entries.get(index) != entry) {
+                        throw new IllegalStateException(entries.get(index) + " vs. " + entry + " at index " + index);
+                    }
+
+                    entry = entry.prev;
+                    index--;
+                }
+            }
+
+            return entries.size();
+        }
+    }
+
+    /**
      * Keep track of all allocated memory so we can dispose of it before unloading.
      */
     private static class Entry extends WeakReference<Memory6> {
+
         private Entry next;
         private Entry prev;
 
@@ -64,6 +100,7 @@ public class Memory6 extends Pointer {
 
         /**
          * Add the given {@code instance} to the instance tracking.
+         *
          * @param instance the instance to track
          */
         static void track(Memory6 instance) {
@@ -109,15 +146,23 @@ public class Memory6 extends Pointer {
 
         /**
          * Remove this instance from tracking, don't call this method from outside!
-         * 
+         *
          * @return the next tracked instance in the linked list
          */
         private Entry remove() {
+            Entry next;
+
             if (HEAD != this) {
-                return this.prev.next = this.next;
+                next = this.prev.next = this.next;
             } else {
-                return HEAD = HEAD.next;
+                next = HEAD = HEAD.next;
             }
+
+            if (next != null) {
+                next.prev = this.prev;
+            }
+
+            return next;
         }
     }
 

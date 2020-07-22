@@ -151,6 +151,11 @@ public class Memory6 extends Pointer {
                 Entry next;
 
                 if (HEAD != this) {
+                    if (this.prev == null) {
+                        // this entry was detached before, e.g. disposeAll was called and finalizers are running now
+                        return;
+                    }
+
                     next = this.prev.next = this.next;
                 } else {
                     next = HEAD = HEAD.next;
@@ -159,6 +164,9 @@ public class Memory6 extends Pointer {
                 if (next != null) {
                     next.prev = this.prev;
                 }
+                
+                // set prev to null to detect detached entries
+                this.prev = null;
             }
         }
     }

@@ -122,11 +122,21 @@ public class Memory6 extends Pointer {
          */
         static void disposeAll() {
             synchronized (Entry.class) {
-                Entry entry = HEAD;
+                Entry entry;
 
-                while (entry != null) {
-                    entry.get().dispose();
-                    entry = entry.remove();
+                while ((entry = HEAD) != null) {
+                    Memory6 memory = HEAD.get();
+
+                    if (memory != null) {
+                        // dispose does the remove call internal
+                        memory.dispose();
+                    } else {
+                        HEAD.remove();
+                    }
+
+                    if (HEAD == entry) {
+                        throw new IllegalStateException("the HEAD did not change");
+                    }
                 }
             }
         }
@@ -136,7 +146,7 @@ public class Memory6 extends Pointer {
          *
          * @return the next tracked instance in the linked list
          */
-        private Entry remove() {
+        private void remove() {
             synchronized (Entry.class) {
                 Entry next;
 
@@ -149,8 +159,6 @@ public class Memory6 extends Pointer {
                 if (next != null) {
                     next.prev = this.prev;
                 }
-
-                return next;
             }
         }
     }
@@ -304,10 +312,8 @@ public class Memory6 extends Pointer {
             free(peer);
         } finally {
             peer = 0;
-
-            if (tracking != null) {
-                tracking.remove();
-            }
+            // no null check, tracking is only null for SharedMemory
+            tracking.remove();
         }
     }
 

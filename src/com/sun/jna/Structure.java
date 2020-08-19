@@ -811,8 +811,7 @@ public abstract class Structure {
         StructField structField = fields().get(name);
         if (structField == null)
             throw new IllegalArgumentException("No such field: " + name);
-        setFieldValue(structField.field, value);
-        writeField(structField);
+        writeField(structField, value);
     }
 
     /**
@@ -823,11 +822,22 @@ public abstract class Structure {
         if (structField.isReadOnly)
             return;
 
-        // Get the offset of the field
-        int offset = structField.offset;
-
         // Get the value from the field
         Object value = getFieldValue(structField.field);
+
+        writeField(structField, value);
+    }
+
+    /**
+     * @param structField internal field representation to synch to native memory
+     * @param value value to write
+     */
+    protected void writeField(StructField structField, Object value) {
+
+        setFieldValue(structField.field, value);
+
+        // Get the offset of the field
+        int offset = structField.offset;
 
         // Determine the type of the field
         Class<?> fieldType = structField.type;
